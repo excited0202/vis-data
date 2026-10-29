@@ -372,6 +372,8 @@ export class DataSet<
    * Update existing items. When an item does not exist, an error will be thrown.
    * @remarks
    * The provided properties will be deeply merged into the existing item.
+   * Updates to the same item are applied in array order, each building on the preceding update.
+   * The update event's `oldData` and `data` entries contain the item immediately before and after each update, respectively.
    * When an item does not exist (id not present in the data set or absent), an error will be thrown and nothing will be changed.
    *
    * After the items are updated, the DataSet will trigger an event `update`.
@@ -434,13 +436,14 @@ export class DataSet<
           updatedData: FullItem<Item, IdProp>;
         } => {
           const id = oldData[this._idProp];
-          const updatedData = pureDeepObjectAssign(oldData, update);
+          const currentData = this._data.get(id)!;
+          const updatedData = pureDeepObjectAssign(currentData, update);
 
           this._data.set(id, updatedData);
 
           return {
             id,
-            oldData: oldData,
+            oldData: currentData,
             updatedData,
           };
         },

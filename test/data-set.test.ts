@@ -219,6 +219,114 @@ describe("Data Set", function (): void {
       ).to.not.equal(originalItem8);
     });
 
+    it("Merges repeated ids in batch order", function (): void {
+      const original = { id: 1, first: "old", second: "old" };
+      const ds = new DataSet([original]);
+
+      const ids = ds.updateOnly([
+        { id: 1, first: "new" },
+        { id: 1, second: "new" },
+      ]);
+
+      expect(ids).to.deep.equal([1, 1]);
+      expect(ds.get(1)).to.deep.equal({ id: 1, first: "new", second: "new" });
+      expect(original).to.deep.equal({ id: 1, first: "old", second: "old" });
+    });
+
+    it("Deeply merges repeated custom ids across other updates", function (): void {
+      const ds = new DataSet<Item2, "whoami">(
+        [
+          { whoami: 7, payload: { foo: "7", bar: true } },
+          { whoami: 8, payload: { foo: "8", bar: false } },
+        ],
+        { fieldId: "whoami" },
+      );
+
+      ds.updateOnly([
+        { whoami: 7, payload: { foo: "new" } },
+        { whoami: 8, payload: { foo: "other" } },
+        { whoami: 7, payload: { bar: false } },
+      ]);
+
+      expect(ds.get()).to.deep.equal([
+        { whoami: 7, payload: { foo: "new", bar: false } },
+        { whoami: 8, payload: { foo: "other", bar: false } },
+      ]);
+    });
+
+    it("Keeps deletions when the same item is updated again", function (): void {
+      const ds = new DataSet<Item3, "whoami">(
+        [{ whoami: 7, payload: { p1: "7", p2: 7, p3: true } }],
+        { fieldId: "whoami" },
+      );
+
+      ds.updateOnly([
+        { whoami: 7, payload: { p1: DELETE } },
+        { whoami: 7, payload: { p2: 8 } },
+      ]);
+
+      expect(ds.get(7)).to.deep.equal({
+        whoami: 7,
+        payload: { p2: 8, p3: true },
+      });
+    });
+
+    it("Reports each repeated update's preceding and resulting data", function (): void {
+      const original = { id: 1, first: "old", second: "old" };
+      const ds = new DataSet([original]);
+      const events: unknown[] = [];
+      ds.on("update", (event, properties, senderId): void => {
+        events.push({ event, properties, senderId });
+      });
+
+      ds.updateOnly(
+        [
+          { id: 1, first: "new" },
+          { id: 1, second: "new" },
+        ],
+        "sender",
+      );
+
+      expect(events).to.deep.equal([
+        {
+          event: "update",
+          senderId: "sender",
+          properties: {
+            items: [1, 1],
+            oldData: [
+              { id: 1, first: "old", second: "old" },
+              { id: 1, first: "new", second: "old" },
+            ],
+            data: [
+              { id: 1, first: "new", second: "old" },
+              { id: 1, first: "new", second: "new" },
+            ],
+          },
+        },
+      ]);
+    });
+
+    it("Validates the entire batch before applying repeated updates", function (): void {
+      const original = { id: 1, first: "old", second: "old" };
+      const ds = new DataSet([original]);
+      const events: unknown[] = [];
+      ds.on("update", (...args): void => {
+        events.push(args);
+      });
+
+      expect((): void => {
+        ds.updateOnly([
+          { id: 1, first: "new" },
+          { id: 1, second: "new" },
+          { id: 2, first: "missing" },
+        ]);
+      }).to.throw("Updating non-existent items is not allowed.");
+
+      expect(ds.get(1)).to.equal(original);
+      expect(ds.get()).to.deep.equal([{ id: 1, first: "old", second: "old" }]);
+      expect(events).to.deep.equal([]);
+    });
+
     it("Delete props through updateOnly", function (): void {
       const ds = new DataSet<Item3, "whoami">(
         [{ whoami: 7, payload: { p1: "7", p2: 7, p3: true } }],

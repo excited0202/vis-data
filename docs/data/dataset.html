@@ -751,8 +751,23 @@ var updatedIds = DataSet.updateOnly(data [, senderId])</pre>
       </p>
 
       <p>
+        Updates to the same item are applied in array order, each building on
+        the preceding update. For example:
+      </p>
+
+      <pre class="prettyprint lang-js">
+var data = new vis.DataSet([{ id: 1, first: "old", second: "old" }]);
+data.updateOnly([
+  { id: 1, first: "new" },
+  { id: 1, second: "new" }
+]);
+data.get(1); // { id: 1, first: "new", second: "new" }</pre>
+
+      <p>
         After the items are updated, the DataSet will trigger
-        <code>update</code> event. When a <code>senderId</code> is provided,
+        <code>update</code> event. Its <code>oldData</code> and
+        <code>data</code> entries contain the item immediately before and after
+        each update, respectively. When a <code>senderId</code> is provided,
         this id will be passed with the triggered event to all subscribers.
       </p>
 
